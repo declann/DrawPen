@@ -231,11 +231,6 @@ const Application = (settings) => {
     setActiveWidthIndex(activeFigure.widthIndex)
   }, [activeFigureInfo])
 
-  const allLasersFiguresByRef = useRef(null)
-  useEffect(() => {
-    allLasersFiguresByRef.current = allLaserFigures;
-  }, [allLaserFigures]);
-
   const isActiveFigureMoving = () => {
     return activeFigureInfo && (activeFigureInfo.dragging || activeFigureInfo.resizing)
   }
@@ -244,13 +239,10 @@ const Application = (settings) => {
     return allFigures.find((figure) => figure.id === activeFigureInfo.id);
   }
 
-  const scheduleClearLaserTail = (id) => {
-    // Start fade out animation after laserTime
-    setTimeout(() => {
-      const figure = allLasersFiguresByRef.current.find(f => f.id === id);
-      if (!figure) return;
-
-      // Start fade out animation
+  // Debounced laser fade out function
+  const debouncedLaserFadeOut = useCallback(
+    debounce(() => {
+      // Start fade out animation for all laser figures
       const fadeOutDuration = 500; // 500ms fade out
       const startTime = Date.now();
       
@@ -259,37 +251,38 @@ const Application = (settings) => {
         const progress = Math.min(elapsed / fadeOutDuration, 1);
         const opacity = 1 - progress;
 
-        const updatedFigures = allLasersFiguresByRef.current.map(f => {
-          if (f.id === id) {
-            return { ...f, opacity };
+        setLaserFigure(prevFigures => {
+          const updatedFigures = prevFigures.map(f => ({
+            ...f,
+            opacity
+          }));
+
+          if (progress >= 1) {
+            clearInterval(fadeOutInterval);
+            // Remove all laser figures after fade out
+            return [];
           }
-          return f;
+
+          return updatedFigures;
         });
-
-        setLaserFigure([...updatedFigures]);
-
-        if (progress >= 1) {
-          clearInterval(fadeOutInterval);
-          // Remove the figure after fade out
-          const finalFigures = updatedFigures.filter(f => f.id !== id);
-          setLaserFigure([...finalFigures]);
-        }
       }, 16); // ~60fps
 
       // Store the interval ID for cleanup
       setLaserFadeOutTimers(prev => ({
         ...prev,
-        [id]: fadeOutInterval
+        fadeOut: fadeOutInterval
       }));
-    }, laserTime);
-  };
+    }, laserTime),
+    []
+  );
 
   // Cleanup fade out timers
   useEffect(() => {
     return () => {
       Object.values(laserFadeOutTimers).forEach(timer => clearInterval(timer));
+      debouncedLaserFadeOut.cancel();
     };
-  }, [laserFadeOutTimers]);
+  }, [laserFadeOutTimers, debouncedLaserFadeOut]);
 
   const handleChangeColor = (newColorIndex) => {
     if (activeFigureInfo) {
@@ -392,6 +385,11 @@ const Application = (settings) => {
     }
 
     if (activeTool === 'laser') {
+      // Trigger fade out for existing laser figures when starting a new one
+      if (allLaserFigures.length > 0) {
+        debouncedLaserFadeOut();
+      }
+
       let laserFigure = {
         id: Date.now(),
         type: activeTool,
@@ -400,7 +398,6 @@ const Application = (settings) => {
       };
 
       setLaserFigure([...allLaserFigures, laserFigure]);
-      scheduleClearLaserTail(laserFigure.id)
       setIsDrawing(true);
       return;
     }
@@ -462,7 +459,6 @@ const Application = (settings) => {
         currentLaser.points = [...currentLaser.points, [x, y]];
 
         setLaserFigure([...allLaserFigures]);
-        scheduleClearLaserTail(currentLaser.id)
         return;
       }
 
@@ -512,6 +508,9 @@ const Application = (settings) => {
           currentLaser.points = [];
           setLaserFigure([...allLaserFigures]);
         }
+
+        // Trigger debounced fade out for all laser figures
+        debouncedLaserFadeOut();
       }
 
       if (activeTool === 'pen') {
@@ -578,6 +577,9 @@ const Application = (settings) => {
     setLaserFigure([]);
     setRippleEffects([]);
     setTextEditorContainer(null);
+    
+    // Cancel any pending laser fade out
+    debouncedLaserFadeOut.cancel();
   };
 
   const handleToggleToolbar = () => {
