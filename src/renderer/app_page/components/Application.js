@@ -85,6 +85,7 @@ const Application = (settings) => {
   const [toolbarLastActiveFigure, setToolbarLastActiveFigure] = useState(initialToolbarDefaultFigure);
   const [toolbarPosition, setToolbarPosition] = useState(initialToolbarPosition);
   const [rippleEffects, setRippleEffects] = useState([]);
+  const [laserFadeOutTimers, setLaserFadeOutTimers] = useState({});
 
   useEffect(() => {
     window.electronAPI.onResetScreen(handleReset);
@@ -244,22 +245,51 @@ const Application = (settings) => {
   }
 
   const scheduleClearLaserTail = (id) => {
-    // https://felixgerschau.com/react-hooks-settimeout/
+    // Start fade out animation after laserTime
     setTimeout(() => {
-      const updatedLaserFigures = clearLaserTail(id, allLasersFiguresByRef.current);
+      const figure = allLasersFiguresByRef.current.find(f => f.id === id);
+      if (!figure) return;
 
-      setLaserFigure([...updatedLaserFigures])
-    }, laserTime)
-  }
+      // Start fade out animation
+      const fadeOutDuration = 500; // 500ms fade out
+      const startTime = Date.now();
+      
+      const fadeOutInterval = setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / fadeOutDuration, 1);
+        const opacity = 1 - progress;
 
-  const clearLaserTail = (id, figures) => {
-    const figure = figures.find(figure => figure.id === id);
-    if (figure) {
-      figure.points.shift();
-    }
+        const updatedFigures = allLasersFiguresByRef.current.map(f => {
+          if (f.id === id) {
+            return { ...f, opacity };
+          }
+          return f;
+        });
 
-    return figures
-  }
+        setLaserFigure([...updatedFigures]);
+
+        if (progress >= 1) {
+          clearInterval(fadeOutInterval);
+          // Remove the figure after fade out
+          const finalFigures = updatedFigures.filter(f => f.id !== id);
+          setLaserFigure([...finalFigures]);
+        }
+      }, 16); // ~60fps
+
+      // Store the interval ID for cleanup
+      setLaserFadeOutTimers(prev => ({
+        ...prev,
+        [id]: fadeOutInterval
+      }));
+    }, laserTime);
+  };
+
+  // Cleanup fade out timers
+  useEffect(() => {
+    return () => {
+      Object.values(laserFadeOutTimers).forEach(timer => clearInterval(timer));
+    };
+  }, [laserFadeOutTimers]);
 
   const handleChangeColor = (newColorIndex) => {
     if (activeFigureInfo) {

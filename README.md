@@ -1,7 +1,9 @@
 # Fork information by declann:
 
-- hello
+(with help from an llm)
 
+- replaced `clearLaserTail` effect by a fade out
+  - BUGs: draw multiple separate paths in quick sucession, the backlog doesn't fade out
 
 ---
 

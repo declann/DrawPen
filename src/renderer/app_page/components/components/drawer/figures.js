@@ -390,12 +390,12 @@ const drawRectangleSkeleton = (ctx, pointA, pointB, color, width) => {
 }
 
 export const drawLaser = (ctx, figure) => {
-  const { points, widthIndex } = figure
+  const { points, widthIndex, opacity = 1 } = figure
   const [innerWidth, otherWidth] = widthList[widthIndex].laser_width;
 
   ctx.shadowBlur = 10;
   ctx.shadowColor = '#FF2D21';
-  ctx.fillStyle = '#EA3323CC';
+  ctx.fillStyle = `rgba(234, 51, 35, ${opacity * 0.8})`; // Outer glow with opacity
   const myStroke1 = getStroke(points, {
     size: otherWidth,
     simulatePressure: false,
@@ -404,7 +404,7 @@ export const drawLaser = (ctx, figure) => {
   const pathData1 = getSvgPathFromStroke(myStroke1);
   ctx.fill(new Path2D(pathData1));
 
-  ctx.fillStyle = '#FFF';
+  ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`; // Inner core with opacity
   const myStroke2 = getStroke(points, {
     size: innerWidth,
     simulatePressure: false,
